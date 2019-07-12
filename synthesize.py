@@ -156,7 +156,7 @@ def main():
                         help='Hyperparameter overrides as a comma-separated list of name=value pairs')
     parser.add_argument('--name', help='Name of logging directory of Tacotron2. If trained separately')
     parser.add_argument('--model', default='Tacotron2')
-    parser.add_argument('--input_dir', default='../train_data/', help='folder to contain inputs sentences/targets')
+    parser.add_argument('--input_dir', default='./train_data/', help='folder to contain inputs sentences/targets')
     parser.add_argument('--mels_dir', default='output/eval/',
                         help='folder to contain mels to synthesize audio from using the Wavenet')
     parser.add_argument('--output_dir', default='output/', help='folder to contain synthesized mel spectrograms')

@@ -33,10 +33,10 @@ Tensorflow implementation of DeepMind's Tacotron-2 (without wavenet). A deep neu
 
 The previous tree shows the current state of the repository (separate training, one step at a time).
 
-- Step **(0)**: Get your dataset, here I have set the examples of **Ljspeech**, **en_US** and **en_UK** (from **M-AILABS**).
+- Step **(0)**: Get your dataset and modify datasets/preprocessor.py -> "build_from_path" function.
 - Step **(1)**: Preprocess your data. This will give you the **train_data** folder.
 - Step **(2)**: Train your Tacotron model. Yields the **logs-Tacotron2** folder.
-- Step **(3)**: Synthesize/Evaluate the Tacotron model. Gives the **Synth_output** folder.
+- Step **(3)**: Synthesize/Evaluate the Tacotron model. Gives the **synth_output** folder.
  
 # Model Architecture:
 <p align="center">

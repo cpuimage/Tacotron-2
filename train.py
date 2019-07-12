@@ -433,10 +433,9 @@ def main(argv):
     parser.add_argument('--base_dir', default='')
     parser.add_argument('--hparams', default='',
                         help='Hyperparameter overrides as a comma-separated list of name=value pairs')
-    parser.add_argument('--train_input', default='../train_data/train.txt')
+    parser.add_argument('--train_input', default='./train_data/train.txt')
     parser.add_argument('--name', help='Name of logging directory.')
     parser.add_argument('--model', default='Tacotron2')
-    parser.add_argument('--input_dir', default='../train_data/', help='folder to contain inputs sentences/targets')
     parser.add_argument('--output_dir', default='output', help='folder to contain synthesized mel spectrograms')
     parser.add_argument('--restore', type=bool, default=True, help='Set this to False to do a fresh training')
     parser.add_argument('--summary_interval', type=int, default=250,
@@ -451,7 +450,7 @@ def main(argv):
                         help='total number of tacotron2 training steps')
     parser.add_argument('--tf_log_level', type=int, default=1, help='Tensorflow C++ log level.')
     parser.add_argument('--slack_url', default=None, help='slack webhook notification destination link')
-    parser.add_argument('--gpu_devices', default='0', help='Set the gpu the model should run on.(eg:hvd,0,1,2...)')
+    parser.add_argument('--gpu_devices', default='hvd', help='Set the gpu the model should run on.(eg:hvd,0,1,2...)')
     args = parser.parse_args(argv[1:])
     use_hvd = args.gpu_devices == 'hvd'
     if not use_hvd:

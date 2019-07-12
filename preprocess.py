@@ -49,8 +49,8 @@ def main():
     parser.add_argument('--base_dir', default='')
     parser.add_argument('--hparams', default='',
                         help='Hyperparameter overrides as a comma-separated list of name=value pairs')
-    parser.add_argument('--dataset', type=str, default='../train_datasets/')
-    parser.add_argument('--output', type=str, default='../train_data/')
+    parser.add_argument('--dataset', type=str, default='./train_datasets/')
+    parser.add_argument('--output', type=str, default='./train_data/')
     parser.add_argument('--n_jobs', type=int, default=cpu_count())
     args = parser.parse_args()
 
