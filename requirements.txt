@@ -1,0 +1,13 @@
+falcon
+inflect
+audioread
+Unidecode
+librosa
+matplotlib
+numpy
+scipy
+tqdm
+keras
+msgpack
+msgpack_numpy
+tensorflow_gpu

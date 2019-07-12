@@ -1,0 +1,182 @@
+import argparse
+from hparams import hparams
+import os
+from time import sleep
+import tensorflow as tf
+from hparams import hparams_debug_string
+from infolog import log
+from synthesizer import Synthesizer
+from tqdm import tqdm
+
+
+def generate_fast(model, text):
+    model.synthesize([text], None, None, None, None)
+
+
+def run_live(checkpoint_path, hparams):
+    # Log to Terminal without keeping any records in files
+    log(hparams_debug_string())
+    synth = Synthesizer()
+    synth.load(checkpoint_path, hparams)
+
+    # Generate fast greeting message
+    greetings = 'Hello, Welcome to the Live testing tool. Please type a message and I will try to read it!'
+    log(greetings)
+    generate_fast(synth, greetings)
+
+    # Interaction loop
+    while True:
+        try:
+            text = input()
+            generate_fast(synth, text)
+
+        except KeyboardInterrupt:
+            leave = 'Thank you for testing our features. see you soon.'
+            log(leave)
+            generate_fast(synth, leave)
+            sleep(2)
+            break
+
+
+def run_eval(args, checkpoint_path, output_dir, hparams, sentences):
+    eval_dir = os.path.join(output_dir, 'eval')
+    log_dir = os.path.join(output_dir, 'logs-eval')
+
+    if args.model == 'Tacotron-2':
+        assert os.path.normpath(eval_dir) == os.path.normpath(args.mels_dir)
+
+    # Create output path if it doesn't exist
+    os.makedirs(eval_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'wavs'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, 'plots'), exist_ok=True)
+
+    log(hparams_debug_string())
+    synth = Synthesizer()
+    synth.load(checkpoint_path, hparams)
+
+    # Set inputs batch wise
+    sentences = [sentences[i: i + hparams.synthesis_batch_size] for i in
+                 range(0, len(sentences), hparams.synthesis_batch_size)]
+
+    log('Starting Synthesis')
+    with open(os.path.join(eval_dir, 'map.txt'), 'w') as file:
+        for i, texts in enumerate(tqdm(sentences)):
+            basenames = ['batch_{}_sentence_{}'.format(i, j) for j in range(len(texts))]
+            mel_filenames = synth.synthesize(texts, basenames, eval_dir, log_dir, None)
+            for elems in zip(texts, mel_filenames):
+                file.write('|'.join([str(x) for x in elems]) + '\n')
+    log('synthesized mel spectrograms at {}'.format(eval_dir))
+    return eval_dir
+
+
+def run_synthesis(args, checkpoint_path, output_dir, hparams):
+    gta = (args.GTA == 'True')
+    if gta:
+        synth_dir = os.path.join(output_dir, 'gta')
+
+        # Create output path if it doesn't exist
+        os.makedirs(synth_dir, exist_ok=True)
+    else:
+        synth_dir = os.path.join(output_dir, 'natural')
+
+        # Create output path if it doesn't exist
+        os.makedirs(synth_dir, exist_ok=True)
+
+    metadata_filename = os.path.join(args.input_dir, 'train.txt')
+    log(hparams_debug_string())
+    synth = Synthesizer()
+    synth.load(checkpoint_path, hparams, gta=gta)
+    with open(metadata_filename, encoding='utf-8') as f:
+        metadata = [line.strip().split('|') for line in f]
+        frame_shift_ms = hparams.hop_size / hparams.sample_rate
+        hours = sum([int(x[4]) for x in metadata]) * frame_shift_ms / 3600
+        log('Loaded metadata for {} examples ({:.2f} hours)'.format(len(metadata), hours))
+
+    # Set inputs batch wise
+    metadata = [metadata[i: i + hparams.synthesis_batch_size] for i in
+                range(0, len(metadata), hparams.synthesis_batch_size)]
+
+    log('Starting Synthesis')
+    mel_dir = os.path.join(args.input_dir, 'mels')
+    wav_dir = os.path.join(args.input_dir, 'audio')
+    with open(os.path.join(synth_dir, 'map.txt'), 'w') as file:
+        for i, meta in enumerate(tqdm(metadata)):
+            texts = [m[5] for m in meta]
+            mel_filenames = [os.path.join(mel_dir, m[1]) for m in meta]
+            wav_filenames = [os.path.join(wav_dir, m[0]) for m in meta]
+            basenames = [os.path.basename(m).replace('.npy', '').replace('mel-', '') for m in mel_filenames]
+            mel_output_filenames = synth.synthesize(texts, basenames, synth_dir, None, mel_filenames)
+
+            for elems in zip(wav_filenames, mel_filenames, mel_output_filenames, texts):
+                file.write('|'.join([str(x) for x in elems]) + '\n')
+    log('synthesized mel spectrograms at {}'.format(synth_dir))
+    return os.path.join(synth_dir, 'map.txt')
+
+
+def synthesize(args, hparams, checkpoint, sentences=None):
+    output_dir = 'synth_' + args.output_dir
+
+    try:
+        checkpoint_path = tf.train.get_checkpoint_state(checkpoint).model_checkpoint_path
+        log('loaded model at {}'.format(checkpoint_path))
+    except:
+        raise RuntimeError('Failed to load checkpoint at {}'.format(checkpoint))
+
+    if args.mode == 'eval':
+        return run_eval(args, checkpoint_path, output_dir, hparams, sentences)
+    elif args.mode == 'synthesis':
+        return run_synthesis(args, checkpoint_path, output_dir, hparams)
+    else:
+        run_live(checkpoint_path, hparams)
+
+
+def prepare_run(args):
+    modified_hp = hparams.parse(args.hparams)
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+    run_name = args.name or args.model
+    checkpoint = os.path.join('logs-' + run_name, args.checkpoint)
+    return checkpoint, modified_hp
+
+
+def get_sentences(args):
+    if args.text_list != '':
+        with open(args.text_list, 'rb') as f:
+            sentences = list(map(lambda l: l.decode("utf-8")[:-1], f.readlines()))
+    else:
+        sentences = ["hello world."]
+    return sentences
+
+
+def main():
+    accepted_modes = ['eval', 'synthesis', 'live']
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--checkpoint', default='pretrained/', help='Path to model checkpoint')
+    parser.add_argument('--hparams', default='',
+                        help='Hyperparameter overrides as a comma-separated list of name=value pairs')
+    parser.add_argument('--name', help='Name of logging directory of Tacotron2. If trained separately')
+    parser.add_argument('--model', default='Tacotron2')
+    parser.add_argument('--input_dir', default='../train_data/', help='folder to contain inputs sentences/targets')
+    parser.add_argument('--mels_dir', default='output/eval/',
+                        help='folder to contain mels to synthesize audio from using the Wavenet')
+    parser.add_argument('--output_dir', default='output/', help='folder to contain synthesized mel spectrograms')
+    parser.add_argument('--mode', default='eval', help='mode of run: can be one of {}'.format(accepted_modes))
+    parser.add_argument('--GTA', default='True',
+                        help='Ground truth aligned synthesis, defaults to True, only considered in synthesis mode')
+    parser.add_argument('--text_list', default='',
+                        help='Text file contains list of texts to be synthesized. Valid if mode=eval')
+    args = parser.parse_args()
+
+    if args.mode not in accepted_modes:
+        raise ValueError('accepted modes are: {}, found {}'.format(accepted_modes, args.mode))
+
+    if args.GTA not in ('True', 'False'):
+        raise ValueError('GTA option must be either True or False')
+
+    checkpoint, hparams = prepare_run(args)
+    sentences = get_sentences(args)
+    synthesize(args, hparams, checkpoint, sentences)
+
+
+if __name__ == '__main__':
+    main()
